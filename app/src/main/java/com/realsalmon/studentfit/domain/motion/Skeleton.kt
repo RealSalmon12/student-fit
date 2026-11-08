@@ -40,6 +40,10 @@ enum class Joint {
     HEAD, NECK, CHEST, PELVIS,
     L_SHOULDER, L_ELBOW, L_WRIST, R_SHOULDER, R_ELBOW, R_WRIST,
     L_HIP, L_KNEE, L_ANKLE, L_TOE, R_HIP, R_KNEE, R_ANKLE, R_TOE,
+
+    /** 얼굴 앞쪽 점(머리가 바라보는 방향). 뼈대 선에는 쓰지 않아요. */
+    FACE,
+    L_HAND, R_HAND,
 }
 
 enum class BoneSide { LEFT, RIGHT, CENTER }
@@ -63,6 +67,15 @@ object Skeleton {
     private const val UPPER_ARM = 0.29f
     private const val FOREARM = 0.27f
     private const val NECK = 0.09f
+    private const val HAND = 0.07f
+
+    private val SURFACE = mapOf(
+        Joint.HEAD to HEAD_RADIUS, Joint.NECK to 0.05f, Joint.CHEST to 0.13f, Joint.PELVIS to 0.11f,
+        Joint.L_SHOULDER to 0.068f, Joint.R_SHOULDER to 0.068f, Joint.L_ELBOW to 0.04f, Joint.R_ELBOW to 0.04f,
+        Joint.L_WRIST to 0.03f, Joint.R_WRIST to 0.03f, Joint.L_HAND to 0.028f, Joint.R_HAND to 0.028f,
+        Joint.L_HIP to 0.105f, Joint.R_HIP to 0.105f, Joint.L_KNEE to 0.054f, Joint.R_KNEE to 0.054f,
+        Joint.L_ANKLE to 0.042f, Joint.R_ANKLE to 0.042f, Joint.L_TOE to 0.036f, Joint.R_TOE to 0.036f,
+    )
 
     val bones = listOf(
         Bone(Joint.PELVIS, Joint.CHEST, BoneSide.CENTER),
@@ -104,9 +117,11 @@ object Skeleton {
         j[Joint.NECK] = neck
         val headDir = torso(Vec3.UP, p.spineCurve / 2f + p.neckFlex)
         val headBase = neck + headDir * NECK + torso(Vec3(0f, 0f, p.headForward), p.spineCurve / 2f)
-        j[Joint.HEAD] = headBase + headDir * HEAD_RADIUS
+        val headCenter = headBase + headDir * HEAD_RADIUS
+        j[Joint.HEAD] = headCenter
+        j[Joint.FACE] = headCenter + torso(Vec3(0f, 0f, 1f), p.spineCurve / 2f + p.neckFlex) * HEAD_RADIUS
 
-        fun arm(side: Int, a: ArmPose, sh: Joint, el: Joint, wr: Joint) {
+        fun arm(side: Int, a: ArmPose, sh: Joint, el: Joint, wr: Joint, hand: Joint) {
             val shoulder = neck + torso(Vec3(side * SHOULDER_HALF, -0.03f, p.shoulderForward), p.spineCurve / 2f)
             val upper = torso(limbDir(a.flex, a.abd, side), p.spineCurve / 2f)
             val fore = torso(limbDir(a.foreFlex, a.foreAbd, side), p.spineCurve / 2f)
@@ -114,9 +129,10 @@ object Skeleton {
             j[sh] = shoulder
             j[el] = elbow
             j[wr] = elbow + fore * FOREARM
+            j[hand] = elbow + fore * (FOREARM + HAND)
         }
-        arm(1, p.leftArm, Joint.L_SHOULDER, Joint.L_ELBOW, Joint.L_WRIST)
-        arm(-1, p.rightArm, Joint.R_SHOULDER, Joint.R_ELBOW, Joint.R_WRIST)
+        arm(1, p.leftArm, Joint.L_SHOULDER, Joint.L_ELBOW, Joint.L_WRIST, Joint.L_HAND)
+        arm(-1, p.rightArm, Joint.R_SHOULDER, Joint.R_ELBOW, Joint.R_WRIST, Joint.R_HAND)
 
         fun leg(side: Int, l: LegPose, hp: Joint, kn: Joint, an: Joint, toe: Joint) {
             val hip = Vec3(side * HIP_HALF, -0.05f, 0f).rotX(p.pelvisTilt)
@@ -137,7 +153,8 @@ object Skeleton {
     /** 가장 낮은 점이 바닥(y = 0)에 닿게 올린 자세. */
     fun solve(p: Pose): SkeletonFrame {
         val raw = solveRaw(p)
-        val minY = raw.joints.entries.minOf { (k, v) -> if (k == Joint.HEAD) v.y - HEAD_RADIUS else v.y }
+        // 관절마다 살 두께를 빼서, 누운 자세에서도 몸 표면이 바닥에 닿게 해요.
+        val minY = raw.joints.entries.minOf { (k, v) -> v.y - (SURFACE[k] ?: 0f) }
         val lift = Vec3(0f, -minY + p.lift, 0f)
         return SkeletonFrame(raw.joints.mapValues { it.value + lift })
     }

@@ -11,31 +11,52 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
-import com.realsalmon.studentfit.domain.motion.BoneSide
-import com.realsalmon.studentfit.domain.motion.Joint
+import com.realsalmon.studentfit.domain.motion.Capsule
+import com.realsalmon.studentfit.domain.motion.Mannequin
+import com.realsalmon.studentfit.domain.motion.Material
 import com.realsalmon.studentfit.domain.motion.Motion
+import com.realsalmon.studentfit.domain.motion.Projected
 import com.realsalmon.studentfit.domain.motion.Projector
-import com.realsalmon.studentfit.domain.motion.Skeleton
 import com.realsalmon.studentfit.domain.motion.SkeletonFrame
+import com.realsalmon.studentfit.domain.motion.Solid
+import com.realsalmon.studentfit.domain.motion.Sphere
 import com.realsalmon.studentfit.domain.motion.Vec3
+import kotlin.math.hypot
+import kotlin.math.max
 
+/** 마네킹 색. 옷 색은 앱 테마를 따라가요. */
 data class SkeletonColors(
-    val left: Color,
-    val right: Color,
-    val center: Color,
+    val shirt: Color,
+    val shorts: Color = Color(0xFF2C2F48),
+    val skin: Color = Color(0xFFF1C7A5),
+    val shoe: Color = Color(0xFFFF7A59),
+    val hair: Color = Color(0xFF2A2230),
     val floor: Color,
-)
+    val shadow: Color = Color(0xFF1E143C),
+) {
+    fun of(m: Material): Color = when (m) {
+        Material.SKIN -> skin
+        Material.SHIRT -> shirt
+        Material.SHORTS -> shorts
+        Material.SHOE -> shoe
+        Material.HAIR -> hair
+        Material.FACE -> lerp(skin, Color(0xFFC98B6B), 0.35f)
+    }
+}
 
 /**
- * 운동 동작을 3D 막대 인형으로 보여줘요.
- * 손가락으로 좌우로 끌면 돌려볼 수 있어요.
+ * 운동 동작을 옷 입은 3D 마네킹으로 보여줘요.
+ * 손가락으로 끌면 돌려볼 수 있어요(좌우: 회전, 위아래: 내려다보는 각도).
  */
 @Composable
 fun SkeletonViewer(
@@ -73,65 +94,100 @@ fun SkeletonViewer(
 
     Canvas(modifier.then(gestures)) {
         val frame = if (playing) motion.frameAt(time) else motion.firstFrame()
-        drawSkeleton(frame, Projector(size.width, size.height, yaw, elevation), colors)
+        drawMannequin(frame, Projector(size.width, size.height, yaw, elevation), colors)
     }
 }
 
-private fun DrawScope.drawSkeleton(frame: SkeletonFrame, pr: Projector, c: SkeletonColors) {
-    // 바닥 격자
-    val grid = 1.2f
-    for (i in -6..6) {
-        val k = i * grid / 6f
-        line(pr, Vec3(k, 0f, -grid), Vec3(k, 0f, grid), c.floor, 1.5f)
-        line(pr, Vec3(-grid, 0f, k), Vec3(grid, 0f, k), c.floor, 1.5f)
-    }
+private fun Color.lighten(k: Float) = lerp(this, Color.White, k)
+private fun Color.darken(k: Float) = lerp(this, Color.Black, k)
 
-    // 그림자
-    val pelvis = frame[Joint.PELVIS]
-    val shadowCenter = pr.project(Vec3(pelvis.x, 0f, pelvis.z))
+private fun DrawScope.drawMannequin(frame: SkeletonFrame, pr: Projector, c: SkeletonColors) {
+    // 바닥 원판
+    val o = pr.project(Vec3(0f, 0f, 0f))
+    val fr = o.scale * 1.2f
     drawOval(
-        brush = Brush.radialGradient(
-            listOf(Color.Black.copy(alpha = 0.18f), Color.Transparent),
-            center = Offset(shadowCenter.x, shadowCenter.y),
-            radius = shadowCenter.scale * 0.6f,
-        ),
-        topLeft = Offset(shadowCenter.x - shadowCenter.scale * 0.6f, shadowCenter.y - shadowCenter.scale * 0.18f),
-        size = Size(shadowCenter.scale * 1.2f, shadowCenter.scale * 0.36f),
+        Brush.radialGradient(listOf(c.floor, c.floor.copy(alpha = 0f)), center = Offset(o.x, o.y), radius = fr),
+        topLeft = Offset(o.x - fr, o.y - fr * 0.3f),
+        size = Size(fr * 2, fr * 0.6f),
     )
 
-    // 먼 뼈부터 그려서 가까운 뼈가 위에 오게 해요.
-    val items = Skeleton.bones.map { b ->
-        val a = pr.project(frame[b.from]); val e = pr.project(frame[b.to])
-        Triple(b, a, e) to (a.depth + e.depth) / 2f
+    val solids = Mannequin.build(frame)
+
+    // 그림자: 모든 도형을 바닥에 눌러 한 겹으로 그려요(겹쳐도 진해지지 않게 레이어 사용).
+    drawIntoCanvas { it.saveLayer(Rect(Offset.Zero, size), Paint().apply { alpha = 0.16f }) }
+    val shadowBrush = Brush.linearGradient(listOf(c.shadow, c.shadow))
+    for (s in solids) {
+        when (s) {
+            is Capsule -> capsule(pr.project(Vec3(s.a.x, 0f, s.a.z)), pr.project(Vec3(s.b.x, 0f, s.b.z)), s.ra, s.rb, shadowBrush)
+            is Sphere -> {
+                val p = pr.project(Vec3(s.c.x, 0f, s.c.z)); val r = s.r * p.scale
+                drawOval(c.shadow, Offset(p.x - r, p.y - r * 0.5f), Size(2 * r, r))
+            }
+        }
+    }
+    drawIntoCanvas { it.restore() }
+
+    // 먼 도형부터 그려서 가까운 도형이 위에 오게 해요.
+    val sorted = solids.map { s ->
+        val depth = when (s) {
+            is Capsule -> (pr.project(s.a).depth + pr.project(s.b).depth) / 2f
+            is Sphere -> pr.project(s.c).depth
+        }
+        s to depth - s.layer * 0.03f
     }.sortedByDescending { it.second }
 
-    val head = pr.project(frame[Joint.HEAD])
-    var headDrawn = false
-    for ((t, depth) in items) {
-        if (!headDrawn && depth < head.depth) {
-            drawHead(head.x, head.y, Skeleton.HEAD_RADIUS * head.scale, c.center)
-            headDrawn = true
+    for ((s, _) in sorted) drawSolid(s, pr, c)
+}
+
+private fun DrawScope.drawSolid(s: Solid, pr: Projector, c: SkeletonColors) {
+    var base = c.of(s.material)
+    if (s.rightSide) base = base.darken(0.12f)
+    when (s) {
+        is Capsule -> {
+            val a = pr.project(s.a); val b = pr.project(s.b)
+            capsule(a, b, s.ra, s.rb, null, base)
         }
-        val (bone, a, e) = t
-        val color = when (bone.side) {
-            BoneSide.LEFT -> c.left
-            BoneSide.RIGHT -> c.right
-            BoneSide.CENTER -> c.center
+        is Sphere -> {
+            val p = pr.project(s.c); val r = s.r * p.scale
+            drawCircle(
+                Brush.radialGradient(
+                    0f to base.lighten(0.35f), 0.45f to base, 1f to base.darken(0.38f),
+                    center = Offset(p.x - r * 0.35f, p.y - r * 0.4f), radius = r * 1.4f,
+                ),
+                radius = r, center = Offset(p.x, p.y),
+            )
         }
-        val w = 0.07f * (a.scale + e.scale) / 2f
-        drawLine(color, Offset(a.x, a.y), Offset(e.x, e.y), strokeWidth = w, cap = StrokeCap.Round)
-        drawCircle(color.copy(alpha = 1f), radius = w * 0.62f, center = Offset(e.x, e.y))
     }
-    if (!headDrawn) drawHead(head.x, head.y, Skeleton.HEAD_RADIUS * head.scale, c.center)
 }
 
-private fun DrawScope.drawHead(x: Float, y: Float, r: Float, color: Color) {
-    drawCircle(color, radius = r, center = Offset(x, y))
-    drawCircle(Color.White.copy(alpha = 0.25f), radius = r * 0.45f, center = Offset(x - r * 0.3f, y - r * 0.3f))
-    drawCircle(color, radius = r, center = Offset(x, y), style = Stroke(width = r * 0.08f))
-}
+/** 화면 위 캡슐: 양 끝 원 + 사이 사각형. 빛은 왼쪽 위에서 와요. */
+private fun DrawScope.capsule(a: Projected, b: Projected, ra0: Float, rb0: Float, flat: Brush?, base: Color = Color.Black) {
+    val ra = ra0 * a.scale; val rb = rb0 * b.scale
+    var dx = b.x - a.x; var dy = b.y - a.y
+    val len = hypot(dx, dy)
+    var nx = 0f; var ny = -1f
+    val quad = if (len > 0.5f) {
+        dx /= len; dy /= len
+        nx = -dy; ny = dx
+        if (nx + ny > 0) { nx = -nx; ny = -ny }
+        Path().apply {
+            moveTo(a.x + nx * ra, a.y + ny * ra)
+            lineTo(b.x + nx * rb, b.y + ny * rb)
+            lineTo(b.x - nx * rb, b.y - ny * rb)
+            lineTo(a.x - nx * ra, a.y - ny * ra)
+            close()
+        }
+    } else null
 
-private fun DrawScope.line(pr: Projector, a: Vec3, b: Vec3, color: Color, w: Float) {
-    val pa = pr.project(a); val pb = pr.project(b)
-    drawLine(color, Offset(pa.x, pa.y), Offset(pb.x, pb.y), strokeWidth = w)
+    val brush = flat ?: run {
+        val mx = (a.x + b.x) / 2f; val my = (a.y + b.y) / 2f; val r = max(ra, rb)
+        Brush.linearGradient(
+            0f to base.lighten(0.3f), 0.3f to base, 0.65f to base.darken(0.2f), 1f to base.darken(0.4f),
+            start = Offset(mx + nx * r, my + ny * r),
+            end = Offset(mx - nx * r + 0.01f, my - ny * r),
+        )
+    }
+    drawCircle(brush, radius = ra, center = Offset(a.x, a.y))
+    drawCircle(brush, radius = rb, center = Offset(b.x, b.y))
+    quad?.let { drawPath(it, brush) }
 }

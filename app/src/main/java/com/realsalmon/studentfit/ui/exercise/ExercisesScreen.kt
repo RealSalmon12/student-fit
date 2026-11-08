@@ -49,10 +49,8 @@ import com.realsalmon.studentfit.ui.rememberRoutineLog
 
 @Composable
 fun skeletonColors() = SkeletonColors(
-    left = MaterialTheme.colorScheme.primary,
-    right = MaterialTheme.colorScheme.tertiary,
-    center = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-    floor = MaterialTheme.colorScheme.outlineVariant,
+    shirt = MaterialTheme.colorScheme.primary,
+    floor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
 )
 
 @Composable
