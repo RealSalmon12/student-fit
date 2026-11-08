@@ -21,6 +21,15 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import com.realsalmon.studentfit.domain.motion.Joint
+import com.realsalmon.studentfit.domain.motion.ViewAngle
+import kotlinx.coroutines.launch
 import com.realsalmon.studentfit.domain.motion.Capsule
 import com.realsalmon.studentfit.domain.motion.Mannequin
 import com.realsalmon.studentfit.domain.motion.Material
@@ -51,51 +60,91 @@ data class SkeletonColors(
         Material.SHOE -> shoe
         Material.HAIR -> hair
         Material.FACE -> lerp(skin, Color(0xFFC98B6B), 0.35f)
+        Material.EYE -> hair
     }
 }
 
+/** 화면 맞춤에 쓰는 상체 관절. */
+private val UPPER_FOCUS = setOf(
+    Joint.HEAD, Joint.FACE, Joint.NECK, Joint.CHEST, Joint.PELVIS, Joint.L_SHOULDER, Joint.R_SHOULDER,
+)
+
 /**
  * 운동 동작을 옷 입은 3D 마네킹으로 보여줘요.
- * 손가락으로 끌면 돌려볼 수 있어요(좌우: 회전, 위아래: 내려다보는 각도).
+ * - [view]가 바뀌면 그 시점으로 부드럽게 돌아가요.
+ * - 손가락으로 끌면 직접 돌려볼 수 있어요(좌우: 회전, 위아래: 내려다보는 각도).
+ * - [time]을 주면 그 시각의 자세를 보여줘요(따라하기에서 횟수와 맞출 때). 없으면 스스로 재생해요.
  */
 @Composable
 fun SkeletonViewer(
     motion: Motion,
     colors: SkeletonColors,
     modifier: Modifier = Modifier,
+    view: ViewAngle = ViewAngle.THREE_QUARTER,
+    focusUpper: Boolean = false,
     playing: Boolean = true,
     interactive: Boolean = true,
-    initialYaw: Float = 35f,
     speed: Float = 1f,
+    time: Float? = null,
 ) {
-    var time by remember(motion) { mutableFloatStateOf(0f) }
-    var yaw by remember(motion) { mutableFloatStateOf(initialYaw) }
-    var elevation by remember(motion) { mutableFloatStateOf(14f) }
+    var clock by remember(motion) { mutableFloatStateOf(0f) }
+    val yaw = remember(motion) { Animatable(view.yaw) }
+    val elevation = remember(motion) { Animatable(view.elevation) }
+    val scope = rememberCoroutineScope()
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
-    LaunchedEffect(motion, playing, speed) {
-        if (!playing) return@LaunchedEffect
+    LaunchedEffect(view) {
+        launch { yaw.animateTo(nearestAngle(yaw.value, view.yaw), tween(650)) }
+        launch { elevation.animateTo(view.elevation, tween(650)) }
+    }
+
+    LaunchedEffect(motion, playing, speed, time == null) {
+        if (!playing || time != null) return@LaunchedEffect
         var last = withFrameNanos { it }
         while (true) {
             val now = withFrameNanos { it }
-            time += (now - last) / 1_000_000_000f * speed
+            clock += (now - last) / 1_000_000_000f * speed
             last = now
         }
+    }
+
+    // 동작 전체가 꽉 차게 한 번만 맞춰요(돌려도 크기가 출렁이지 않게).
+    val fitted = remember(motion, canvasSize, focusUpper) {
+        if (canvasSize == IntSize.Zero) null
+        else Projector.fit(
+            motion.sampleFrames, canvasSize.width.toFloat(), canvasSize.height.toFloat(),
+            view.yaw, view.elevation,
+            focus = if (focusUpper) UPPER_FOCUS else null,
+            margin = if (focusUpper) 0.2f else 0.13f,
+        )
     }
 
     val gestures = if (interactive) {
         Modifier.pointerInput(motion) {
             detectDragGestures { change, drag ->
                 change.consume()
-                yaw += drag.x * 0.4f
-                elevation = (elevation + drag.y * 0.2f).coerceIn(-5f, 60f)
+                scope.launch {
+                    yaw.snapTo(yaw.value + drag.x * 0.4f)
+                    elevation.snapTo((elevation.value + drag.y * 0.2f).coerceIn(-2f, 60f))
+                }
             }
         }
     } else Modifier
 
-    Canvas(modifier.then(gestures)) {
-        val frame = if (playing) motion.frameAt(time) else motion.firstFrame()
-        drawMannequin(frame, Projector(size.width, size.height, yaw, elevation), colors)
+    Canvas(modifier.onSizeChanged { canvasSize = it }.then(gestures)) {
+        val pr = fitted?.withView(yaw.value, elevation.value) ?: return@Canvas
+        val t = time ?: clock
+        val frame = if (time == null && !playing) motion.firstFrame() else motion.frameAt(t)
+        drawMannequin(frame, pr, colors)
     }
+}
+
+/** 지금 각도에서 가장 가까운 방향으로 돌도록 목표 각도를 맞춰요. */
+private fun nearestAngle(current: Float, target: Float): Float {
+    var t = target
+    while (t - current > 180f) t -= 360f
+    while (t - current < -180f) t += 360f
+    return t
 }
 
 private fun Color.lighten(k: Float) = lerp(this, Color.White, k)
@@ -149,6 +198,8 @@ private fun DrawScope.drawSolid(s: Solid, pr: Projector, c: SkeletonColors) {
         }
         is Sphere -> {
             val p = pr.project(s.c); val r = s.r * p.scale
+            val behind = s.hideBehind
+            if (behind != null && p.depth > pr.project(behind).depth - 0.04f) return
             drawCircle(
                 Brush.radialGradient(
                     0f to base.lighten(0.35f), 0.45f to base, 1f to base.darken(0.38f),

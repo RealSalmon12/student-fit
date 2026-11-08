@@ -56,7 +56,7 @@ data class SkeletonFrame(val joints: Map<Joint, Vec3>) {
 }
 
 object Skeleton {
-    const val HEAD_RADIUS = 0.11f
+    const val HEAD_RADIUS = 0.115f
 
     private const val HIP_HALF = 0.09f
     private const val THIGH = 0.43f

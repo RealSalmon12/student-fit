@@ -65,6 +65,14 @@ data class Pose(
         leftLeg.lerp(o.leftLeg, t), rightLeg.lerp(o.rightLeg, t),
     )
 
+    /** 좌우를 뒤집은 자세(한쪽씩 하는 운동의 반대쪽). */
+    fun mirrored() = copy(
+        bodyRoll = -bodyRoll,
+        trunkSide = -trunkSide,
+        leftArm = rightArm, rightArm = leftArm,
+        leftLeg = rightLeg, rightLeg = leftLeg,
+    )
+
     /** 양쪽 팔을 같게. */
     fun arms(a: ArmPose) = copy(leftArm = a, rightArm = a)
     /** 양쪽 다리를 같게. */

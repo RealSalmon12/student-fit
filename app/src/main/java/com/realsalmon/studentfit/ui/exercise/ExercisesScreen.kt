@@ -113,14 +113,15 @@ private fun ExerciseCard(ex: Exercise, tags: List<String>, done: Boolean, onClic
             ) {
                 SkeletonViewer(
                     ex.motion, skeletonColors(), Modifier.fillMaxSize(),
-                    playing = false, interactive = false,
+                    view = ex.view, focusUpper = ex.focusUpper,
+                    playing = false, interactive = false, time = ex.thumbnailTime,
                 )
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(ex.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${ex.category.label} · ${ex.dose}",
+                    "${ex.category.label} · ${ex.level.label} · ${ex.dose}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,

@@ -37,6 +37,7 @@ import com.realsalmon.studentfit.ui.bodytype.BodyTypeInputScreen
 import com.realsalmon.studentfit.ui.camera.CameraScanScreen
 import com.realsalmon.studentfit.ui.exercise.ExerciseDetailScreen
 import com.realsalmon.studentfit.ui.exercise.ExercisesScreen
+import com.realsalmon.studentfit.ui.exercise.GuideScreen
 import com.realsalmon.studentfit.ui.home.HomeScreen
 import com.realsalmon.studentfit.ui.watch.WatchScreen
 
@@ -48,7 +49,9 @@ object Routes {
     const val BODY_INPUT = "body_input"
     const val CAMERA_SCAN = "camera_scan"
     const val EXERCISE_DETAIL = "exercise/{id}"
+    const val GUIDE = "guide/{id}"
     fun exercise(id: String) = "exercise/$id"
+    fun guide(id: String) = "guide/$id"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
@@ -70,6 +73,7 @@ class AppNavigator(private val nav: NavHostController) {
     fun bodyInput() = nav.navigate(Routes.BODY_INPUT)
     fun camera() = nav.navigate(Routes.CAMERA_SCAN)
     fun exercise(id: String) = nav.navigate(Routes.exercise(id))
+    fun guide(id: String) = nav.navigate(Routes.guide(id))
     fun back() { nav.popBackStack() }
 }
 
@@ -121,7 +125,13 @@ fun StudentFitApp() {
                 Routes.EXERCISE_DETAIL,
                 arguments = listOf(navArgument("id") { type = NavType.StringType }),
             ) { e ->
-                ExerciseDetailScreen(id = e.arguments?.getString("id").orEmpty(), onBack = go::back)
+                ExerciseDetailScreen(id = e.arguments?.getString("id").orEmpty(), onBack = go::back, onGuide = go::guide)
+            }
+            composable(
+                Routes.GUIDE,
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { e ->
+                GuideScreen(id = e.arguments?.getString("id").orEmpty(), onClose = go::back)
             }
         }
     }
