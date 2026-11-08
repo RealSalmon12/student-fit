@@ -11,8 +11,8 @@ class SkeletonTest {
     fun standingPersonIsAboutOnePointSevenTall() {
         val f = Skeleton.solve(Pose())
         val top = f[Joint.HEAD].y + Skeleton.HEAD_RADIUS
-        assertTrue("height=$top", top in 1.6f..1.85f)
-        assertEquals(0.042f, f[Joint.L_ANKLE].y, 0.001f)
+        assertTrue("height=$top", top in 1.55f..1.75f)
+        assertEquals(0.1f, f[Joint.L_ANKLE].y, 0.001f)
     }
 
     @Test

@@ -50,31 +50,32 @@ enum class BoneSide { LEFT, RIGHT, CENTER }
 
 data class Bone(val from: Joint, val to: Joint, val side: BoneSide)
 
-/** 계산된 3D 자세. 바닥은 y = 0이고, 사람 키는 대략 1.75 단위예요. */
+/** 계산된 3D 자세. 바닥은 y = 0이고, 사람 키는 대략 1.65 단위예요(3D 모델 비율). */
 data class SkeletonFrame(val joints: Map<Joint, Vec3>) {
     operator fun get(j: Joint): Vec3 = joints.getValue(j)
 }
 
 object Skeleton {
-    const val HEAD_RADIUS = 0.115f
+    const val HEAD_RADIUS = 0.105f
 
-    private const val HIP_HALF = 0.09f
-    private const val THIGH = 0.43f
-    private const val SHIN = 0.43f
+    private const val HIP_HALF = 0.066f
+    private const val THIGH = 0.362f
+    private const val SHIN = 0.462f
     private const val FOOT = 0.13f
-    private const val SPINE_HALF = 0.26f
-    private const val SHOULDER_HALF = 0.18f
-    private const val UPPER_ARM = 0.29f
-    private const val FOREARM = 0.27f
-    private const val NECK = 0.09f
-    private const val HAND = 0.07f
+    private const val SPINE_HALF = 0.1415f
+    private const val SHOULDER_HALF = 0.102f
+    private const val UPPER_ARM = 0.242f
+    private const val FOREARM = 0.216f
+    private const val NECK = 0.06f
+    private const val HAND = 0.08f
+    private const val HIP_DROP = 0.088f
 
     private val SURFACE = mapOf(
         Joint.HEAD to HEAD_RADIUS, Joint.NECK to 0.05f, Joint.CHEST to 0.13f, Joint.PELVIS to 0.11f,
         Joint.L_SHOULDER to 0.068f, Joint.R_SHOULDER to 0.068f, Joint.L_ELBOW to 0.04f, Joint.R_ELBOW to 0.04f,
         Joint.L_WRIST to 0.03f, Joint.R_WRIST to 0.03f, Joint.L_HAND to 0.028f, Joint.R_HAND to 0.028f,
         Joint.L_HIP to 0.105f, Joint.R_HIP to 0.105f, Joint.L_KNEE to 0.054f, Joint.R_KNEE to 0.054f,
-        Joint.L_ANKLE to 0.042f, Joint.R_ANKLE to 0.042f, Joint.L_TOE to 0.036f, Joint.R_TOE to 0.036f,
+        Joint.L_ANKLE to 0.1f, Joint.R_ANKLE to 0.1f, Joint.L_TOE to 0.04f, Joint.R_TOE to 0.04f,
     )
 
     val bones = listOf(
@@ -122,7 +123,7 @@ object Skeleton {
         j[Joint.FACE] = headCenter + torso(Vec3(0f, 0f, 1f), p.spineCurve / 2f + p.neckFlex) * HEAD_RADIUS
 
         fun arm(side: Int, a: ArmPose, sh: Joint, el: Joint, wr: Joint, hand: Joint) {
-            val shoulder = neck + torso(Vec3(side * SHOULDER_HALF, -0.03f, p.shoulderForward), p.spineCurve / 2f)
+            val shoulder = neck + torso(Vec3(side * SHOULDER_HALF, -0.034f, p.shoulderForward), p.spineCurve / 2f)
             val upper = torso(limbDir(a.flex, a.abd, side), p.spineCurve / 2f)
             val fore = torso(limbDir(a.foreFlex, a.foreAbd, side), p.spineCurve / 2f)
             val elbow = shoulder + upper * UPPER_ARM
@@ -135,7 +136,7 @@ object Skeleton {
         arm(-1, p.rightArm, Joint.R_SHOULDER, Joint.R_ELBOW, Joint.R_WRIST, Joint.R_HAND)
 
         fun leg(side: Int, l: LegPose, hp: Joint, kn: Joint, an: Joint, toe: Joint) {
-            val hip = Vec3(side * HIP_HALF, -0.05f, 0f).rotX(p.pelvisTilt)
+            val hip = Vec3(side * HIP_HALF, -HIP_DROP, 0f).rotX(p.pelvisTilt)
             val knee = hip + limbDir(l.hipFlex, l.hipAbd, side) * THIGH
             val ankle = knee + limbDir(l.hipFlex - l.knee, l.hipAbd, side) * SHIN
             j[hp] = hip

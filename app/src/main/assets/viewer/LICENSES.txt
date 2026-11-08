@@ -1,0 +1,2 @@
+three.js (r170) - MIT License - Copyright © 2010-2024 three.js authors - https://github.com/mrdoob/three.js
+Michelle character - Mixamo (Adobe), from the three.js examples (examples/models/gltf/Michelle.glb). Mixamo characters are royalty free for use in projects.

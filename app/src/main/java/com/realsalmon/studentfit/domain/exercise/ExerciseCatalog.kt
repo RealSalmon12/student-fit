@@ -25,16 +25,16 @@ object ExerciseCatalog {
     private val QUADRUPED = Pose(
         bodyPitch = 90f,
         leftArm = ArmPose.straight(90f, 4f), rightArm = ArmPose.straight(90f, 4f),
-        leftLeg = LegPose(hipFlex = 90f, knee = 90f, ankle = -60f),
-        rightLeg = LegPose(hipFlex = 90f, knee = 90f, ankle = -60f),
+        leftLeg = LegPose(hipFlex = 90f, knee = 90f, ankle = 50f),
+        rightLeg = LegPose(hipFlex = 90f, knee = 90f, ankle = 50f),
     )
 
     // 누워서 무릎 세운 자세(발은 바닥, 팔은 몸 옆 바닥)
     private val HOOK_LYING = Pose(
-        bodyPitch = -90f,
+        bodyPitch = -94f,
         leftArm = ArmPose.straight(-8f, 14f), rightArm = ArmPose.straight(-8f, 14f),
-        leftLeg = LegPose(hipFlex = 50f, knee = 100f, ankle = 30f),
-        rightLeg = LegPose(hipFlex = 50f, knee = 100f, ankle = 30f),
+        leftLeg = LegPose(hipFlex = 55f, knee = 95f, ankle = 45f),
+        rightLeg = LegPose(hipFlex = 55f, knee = 95f, ankle = 45f),
     )
 
     // 오른쪽으로 옆으로 누운 자세(아래팔로 머리 받침, 아래 다리는 살짝 굽힘)
@@ -192,10 +192,10 @@ object ExerciseCatalog {
             concerns = setOf(C.FLAT_HIP, C.THICK_THIGHS),
             view = ViewAngle(80f, 10f),
             motion = run {
-                val top = HOOK_LYING.arms(ArmPose.straight(14f, 14f)).copy(
-                    bodyPitch = -112f,
-                    leftLeg = LegPose(-4f, 3f, 104f, 30f),
-                    rightLeg = LegPose(-4f, 3f, 104f, 30f),
+                val top = HOOK_LYING.arms(ArmPose.straight(-43f, 14f)).copy(
+                    bodyPitch = -130f,
+                    leftLeg = LegPose(0f, 3f, 100f, 30f),
+                    rightLeg = LegPose(0f, 3f, 100f, 30f),
                 )
                 Motion(listOf(Key(HOOK_LYING, 1.4f), Key(top, 2f), Key(top, 1.6f)), periodSec = 5f)
             },
@@ -261,7 +261,7 @@ object ExerciseCatalog {
             view = ViewAngle(75f, 10f),
             holdAtSec = 3f,
             motion = run {
-                val plank = Pose(bodyPitch = 79f).arms(ArmPose(flex = 79f, abd = 5f, foreFlex = 170f, foreAbd = -6f))
+                val plank = Pose(bodyPitch = 82f).arms(ArmPose(flex = 82f, abd = 5f, foreFlex = 170f, foreAbd = -6f))
                     .legs(LegPose(hipAbd = 3f, ankle = -50f))
                 // 무릎을 바닥에 댄 시작 자세: 허벅지는 비스듬히, 정강이는 바닥에 눕혀요.
                 val knees = Pose(bodyPitch = 62f).arms(ArmPose(flex = 62f, abd = 5f, foreFlex = 152f, foreAbd = -6f))
@@ -440,8 +440,8 @@ object ExerciseCatalog {
             concerns = setOf(C.THICK_THIGHS),
             view = ViewAngle(0f, 28f),
             motion = run {
-                val open = HOOK_LYING.legs(LegPose(50f, 16f, 100f, 30f))
-                val closed = HOOK_LYING.legs(LegPose(50f, 2f, 100f, 30f))
+                val open = HOOK_LYING.legs(LegPose(55f, 16f, 95f, 45f))
+                val closed = HOOK_LYING.legs(LegPose(55f, 2f, 95f, 45f))
                 Motion(listOf(Key(open, 1f), Key(closed, 5f), Key(closed, 1f)), periodSec = 7f, anchor = Anchor.PELVIS)
             },
         ),

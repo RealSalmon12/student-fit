@@ -91,9 +91,8 @@ fun ExerciseViewerCard(
                     ),
                 ),
         ) {
-            SkeletonViewer(
+            ModelViewer(
                 motion = if (mirrored) ex.mirroredMotion else ex.motion,
-                colors = skeletonColors(),
                 modifier = Modifier.fillMaxSize(),
                 view = choices[viewIndex].second,
                 focusUpper = ex.focusUpper,

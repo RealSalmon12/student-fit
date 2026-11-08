@@ -131,9 +131,8 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
                     ),
                 ),
         ) {
-            SkeletonViewer(
+            ModelViewer(
                 motion = motion,
-                colors = skeletonColors(),
                 modifier = Modifier.fillMaxSize(),
                 view = ex.view,
                 focusUpper = ex.focusUpper,

@@ -1,5 +1,7 @@
 package com.realsalmon.studentfit.ui.exercise
 
+import androidx.compose.ui.graphics.asImageBitmap
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -111,11 +113,7 @@ private fun ExerciseCard(ex: Exercise, tags: List<String>, done: Boolean, onClic
             Box(
                 Modifier.size(84.dp).clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainer),
             ) {
-                SkeletonViewer(
-                    ex.motion, skeletonColors(), Modifier.fillMaxSize(),
-                    view = ex.view, focusUpper = ex.focusUpper,
-                    playing = false, interactive = false, time = ex.thumbnailTime,
-                )
+                ExerciseThumbnail(ex, Modifier.fillMaxSize())
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -140,5 +138,25 @@ private fun ExerciseCard(ex: Exercise, tags: List<String>, done: Boolean, onClic
                 )
             }
         }
+    }
+}
+
+/** 목록용 미리보기: 3D 사람 모델로 미리 찍어 둔 사진(assets/thumbs). 없으면 뼈대 그림으로 대신해요. */
+@Composable
+fun ExerciseThumbnail(ex: Exercise, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bitmap = remember(ex.id) {
+        runCatching {
+            context.assets.open("thumbs/${ex.id}.png").use { android.graphics.BitmapFactory.decodeStream(it) }?.asImageBitmap()
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        androidx.compose.foundation.Image(bitmap, contentDescription = ex.name, modifier = modifier)
+    } else {
+        SkeletonViewer(
+            ex.motion, skeletonColors(), modifier,
+            view = ex.view, focusUpper = ex.focusUpper,
+            playing = false, interactive = false, time = ex.thumbnailTime,
+        )
     }
 }

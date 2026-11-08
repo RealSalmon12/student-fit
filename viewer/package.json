@@ -1,0 +1,10 @@
+{
+  "name": "student-fit-viewer",
+  "private": true,
+  "description": "3D 사람 모델 뷰어 (앱의 assets/viewer/viewer.js로 묶여요)",
+  "scripts": {
+    "build": "esbuild src/viewer.js --bundle --minify --legal-comments=eof --outfile=../app/src/main/assets/viewer/viewer.js"
+  },
+  "dependencies": { "three": "0.170.0" },
+  "devDependencies": { "esbuild": "0.24.0" }
+}
