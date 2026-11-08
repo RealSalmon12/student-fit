@@ -13,8 +13,20 @@ android {
         // Health Connect(4단계 워치 연동)가 Android 8.0(API 26) 이상을 요구해요.
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI에서는 실행 번호를 버전 코드로 써서 새 APK가 항상 더 높은 버전이 돼요.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        // 저장소에 고정된 디버그 키를 써서, 새 빌드를 받아도 지우지 않고 덮어 설치할 수 있게 해요.
+        // (개인 테스트용 키예요. 플레이스토어 배포 땐 따로 비밀 키를 만들어야 해요.)
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {

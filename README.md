@@ -27,6 +27,11 @@ app/src/main/java/com/realsalmon/studentfit/
 2. 갤럭시 S25를 USB로 연결하고 개발자 옵션의 USB 디버깅을 켜요.
 3. ▶ 실행을 누르면 폰에 설치돼요.
 
-GitHub Actions가 push할 때마다 테스트를 돌리고 디버그 APK를 만들어요. Actions 탭의 실행 결과에서 `student-fit-debug-apk`를 내려받아 폰에 바로 설치할 수도 있어요.
+### 컴퓨터 없이 폰에 바로 설치
+main에 올라갈 때마다 GitHub Actions가 APK를 새로 만들어 릴리스에 올려요. 갤럭시 S25에서 아래 링크를 열면 바로 받아져요.
+
+**https://github.com/RealSalmon12/student-fit/releases/latest/download/student-fit.apk**
+
+처음 설치할 때 "출처를 알 수 없는 앱" 허용을 물어보면 브라우저(삼성 인터넷이나 Chrome)에 허용해 주세요. 다음부터는 같은 링크로 받아서 덮어 설치하면 돼요.
 
 체형 정보는 폰 안에만 저장되고 서버로 보내지 않아요.
