@@ -13,16 +13,34 @@ data class BodyTypeResult(
     val bmi: Float,
     val bmiCategory: BmiCategory,
     val postureIssues: Set<PostureIssue>,
+    val concerns: Set<BodyConcern> = emptySet(),
 ) {
+    val bmiText: String get() = "${(bmi * 10).roundToInt() / 10f}"
+
+    /** 한눈에 보이는 체형 이름. 가장 눈에 띄는 문제를 기준으로 정해요. */
+    val typeTitle: String
+        get() = when {
+            PostureIssue.ANTERIOR_PELVIC_TILT in postureIssues -> "오리엉덩이형"
+            PostureIssue.FORWARD_HEAD in postureIssues &&
+                (PostureIssue.ROUNDED_SHOULDERS in postureIssues || PostureIssue.ROUNDED_BACK in postureIssues) ->
+                "거북목·굽은 어깨형"
+            PostureIssue.FORWARD_HEAD in postureIssues -> "거북목형"
+            PostureIssue.ROUNDED_SHOULDERS in postureIssues || PostureIssue.ROUNDED_BACK in postureIssues -> "굽은 어깨형"
+            PostureIssue.PELVIC_IMBALANCE in postureIssues || PostureIssue.UNEVEN_SHOULDERS in postureIssues -> "좌우 비대칭형"
+            PostureIssue.BOW_LEGS in postureIssues -> "O다리형"
+            PostureIssue.KNOCK_KNEES in postureIssues -> "X다리형"
+            BodyConcern.THICK_THIGHS in concerns || BodyConcern.SADDLEBAGS in concerns -> "하체 집중형"
+            BodyConcern.BELLY_FAT in concerns -> "복부 집중형"
+            bmiCategory == BmiCategory.UNDERWEIGHT -> "마른 체형"
+            bmiCategory == BmiCategory.NORMAL -> "균형 체형"
+            else -> "체중 관리형"
+        }
+
     val summary: String
         get() = buildString {
-            append("BMI ${(bmi * 10).roundToInt() / 10f} (${bmiCategory.label})")
-            if (postureIssues.isEmpty()) {
-                append(" · 자세 문제 없음")
-            } else {
-                append(" · ")
-                append(postureIssues.joinToString { it.label })
-            }
+            append("BMI $bmiText (${bmiCategory.label})")
+            val tags = postureIssues.map { it.label } + concerns.map { it.label }
+            if (tags.isEmpty()) append(" · 고민 없음") else append(" · ").append(tags.joinToString())
         }
 }
 
@@ -31,7 +49,6 @@ data class BodyTypeResult(
  *
  * BMI 기준은 대한비만학회 성인 기준(18.5 / 23 / 25)을 써요.
  * 만 18세 이하는 원래 성장도표 백분위로 봐야 해서 대략적인 값이에요.
- * TODO: 소아청소년 성장도표(2017) 백분위 기준으로 바꾸기.
  */
 object BodyTypeClassifier {
 
@@ -54,6 +71,7 @@ object BodyTypeClassifier {
             bmi = value,
             bmiCategory = bmiCategory(value),
             postureIssues = profile.postureIssues,
+            concerns = profile.concerns,
         )
     }
 }

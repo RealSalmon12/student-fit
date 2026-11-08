@@ -27,5 +27,16 @@ class BodyTypeClassifierTest {
         val result = BodyTypeClassifier.classify(profile)
         assertEquals(BmiCategory.NORMAL, result.bmiCategory)
         assertEquals(setOf(PostureIssue.FORWARD_HEAD), result.postureIssues)
+        assertEquals("거북목형", result.typeTitle)
+    }
+
+    @Test
+    fun duckButtTitleWins() {
+        val profile = BodyProfile(
+            160f, 50f, 15, Gender.FEMALE,
+            postureIssues = setOf(PostureIssue.FORWARD_HEAD, PostureIssue.ANTERIOR_PELVIC_TILT),
+            concerns = setOf(BodyConcern.THICK_THIGHS),
+        )
+        assertEquals("오리엉덩이형", BodyTypeClassifier.classify(profile).typeTitle)
     }
 }

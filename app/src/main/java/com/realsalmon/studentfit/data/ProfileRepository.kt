@@ -2,6 +2,7 @@ package com.realsalmon.studentfit.data
 
 import android.content.Context
 import androidx.core.content.edit
+import com.realsalmon.studentfit.domain.BodyConcern
 import com.realsalmon.studentfit.domain.BodyProfile
 import com.realsalmon.studentfit.domain.Gender
 import com.realsalmon.studentfit.domain.PostureIssue
@@ -23,6 +24,9 @@ class ProfileRepository(context: Context) {
             postureIssues = prefs.getStringSet(KEY_POSTURE, emptySet()).orEmpty()
                 .mapNotNull { enumValueOrNull<PostureIssue>(it) }
                 .toSet(),
+            concerns = prefs.getStringSet(KEY_CONCERNS, emptySet()).orEmpty()
+                .mapNotNull { enumValueOrNull<BodyConcern>(it) }
+                .toSet(),
             source = enumValueOrNull<ProfileSource>(prefs.getString(KEY_SOURCE, null))
                 ?: ProfileSource.MANUAL,
         )
@@ -35,8 +39,21 @@ class ProfileRepository(context: Context) {
             putInt(KEY_AGE, profile.age)
             putString(KEY_GENDER, profile.gender.name)
             putStringSet(KEY_POSTURE, profile.postureIssues.map { it.name }.toSet())
+            putStringSet(KEY_CONCERNS, profile.concerns.map { it.name }.toSet())
             putString(KEY_SOURCE, profile.source.name)
         }
+    }
+
+    /** 키·몸무게를 입력하기 전에 카메라로 찾은 자세 문제를 잠시 보관해요. */
+    fun savePendingPosture(issues: Set<PostureIssue>) {
+        prefs.edit { putStringSet(KEY_PENDING, issues.map { it.name }.toSet()) }
+    }
+
+    fun takePendingPosture(): Set<PostureIssue> {
+        val set = prefs.getStringSet(KEY_PENDING, emptySet()).orEmpty()
+            .mapNotNull { enumValueOrNull<PostureIssue>(it) }.toSet()
+        prefs.edit { remove(KEY_PENDING) }
+        return set
     }
 
     private inline fun <reified T : Enum<T>> enumValueOrNull(name: String?): T? =
@@ -48,6 +65,8 @@ class ProfileRepository(context: Context) {
         const val KEY_AGE = "age"
         const val KEY_GENDER = "gender"
         const val KEY_POSTURE = "posture_issues"
+        const val KEY_CONCERNS = "concerns"
         const val KEY_SOURCE = "source"
+        const val KEY_PENDING = "pending_posture"
     }
 }

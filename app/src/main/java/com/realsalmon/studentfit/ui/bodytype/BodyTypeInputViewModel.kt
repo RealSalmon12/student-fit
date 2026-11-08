@@ -6,11 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.realsalmon.studentfit.data.ProfileRepository
+import com.realsalmon.studentfit.domain.BodyConcern
 import com.realsalmon.studentfit.domain.BodyProfile
 import com.realsalmon.studentfit.domain.BodyTypeClassifier
 import com.realsalmon.studentfit.domain.BodyTypeResult
 import com.realsalmon.studentfit.domain.Gender
 import com.realsalmon.studentfit.domain.PostureIssue
+import com.realsalmon.studentfit.domain.ProfileSource
 
 data class BodyInputState(
     val height: String = "",
@@ -18,6 +20,8 @@ data class BodyInputState(
     val age: String = "",
     val gender: Gender = Gender.MALE,
     val postureIssues: Set<PostureIssue> = emptySet(),
+    val concerns: Set<BodyConcern> = emptySet(),
+    val source: ProfileSource = ProfileSource.MANUAL,
     val error: String? = null,
     val result: BodyTypeResult? = null,
 )
@@ -30,6 +34,10 @@ class BodyTypeInputViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     init {
+        val pending = repo.takePendingPosture()
+        if (pending.isNotEmpty()) {
+            state = state.copy(postureIssues = pending, source = ProfileSource.CAMERA)
+        }
         repo.load()?.let { p ->
             state = BodyInputState(
                 height = p.heightCm.toCleanString(),
@@ -37,6 +45,8 @@ class BodyTypeInputViewModel(app: Application) : AndroidViewModel(app) {
                 age = p.age.toString(),
                 gender = p.gender,
                 postureIssues = p.postureIssues,
+                concerns = p.concerns,
+                source = p.source,
                 result = BodyTypeClassifier.classify(p),
             )
         }
@@ -48,9 +58,11 @@ class BodyTypeInputViewModel(app: Application) : AndroidViewModel(app) {
     fun onGender(g: Gender) { state = state.copy(gender = g) }
 
     fun togglePosture(issue: PostureIssue) {
-        val next = state.postureIssues.toMutableSet()
-        if (!next.add(issue)) next.remove(issue)
-        state = state.copy(postureIssues = next)
+        state = state.copy(postureIssues = state.postureIssues.toggle(issue))
+    }
+
+    fun toggleConcern(c: BodyConcern) {
+        state = state.copy(concerns = state.concerns.toggle(c))
     }
 
     /** 저장에 성공하면 true. */
@@ -68,11 +80,13 @@ class BodyTypeInputViewModel(app: Application) : AndroidViewModel(app) {
             state = state.copy(error = error)
             return false
         }
-        val profile = BodyProfile(h!!, w!!, a!!, state.gender, state.postureIssues)
+        val profile = BodyProfile(h!!, w!!, a!!, state.gender, state.postureIssues, state.concerns, state.source)
         repo.save(profile)
         state = state.copy(error = null, result = BodyTypeClassifier.classify(profile))
         return true
     }
+
+    private fun <T> Set<T>.toggle(v: T): Set<T> = if (v in this) this - v else this + v
 
     private fun String.filterNumber(): String {
         val cleaned = filter { it.isDigit() || it == '.' }
