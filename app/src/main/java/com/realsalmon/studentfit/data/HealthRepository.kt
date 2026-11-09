@@ -10,6 +10,7 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -35,6 +36,10 @@ data class WatchSummary(
     val activeKcal: Double,
     val week: List<DaySteps>,
     val workouts: List<WorkoutInfo>,
+    /** 오늘 걸음 기록이 마지막으로 들어온 시각(삼성 헬스가 동기화한 시점). */
+    val stepsUpdatedAt: Instant? = null,
+    /** 걸음 수를 삼성 헬스 기록만으로 셌는지. */
+    val fromSamsungHealth: Boolean = false,
 )
 
 /**
@@ -81,12 +86,35 @@ class HealthRepository(private val context: Context) {
             ),
         )
 
+        // 걸음 수: Health Connect엔 폰 자체 걸음, 구글 앱 등 여러 출처가 섞여 있어서
+        // 워치와 숫자가 달라질 수 있어요. 삼성 헬스(워치+폰을 합친 값) 기록이 있으면 그것만 써요.
+        val samsung = setOf(DataOrigin(SAMSUNG_HEALTH))
+        val samsungSteps = runCatching {
+            client.aggregate(
+                AggregateRequest(setOf(StepsRecord.COUNT_TOTAL), todayRange, dataOriginFilter = samsung),
+            )[StepsRecord.COUNT_TOTAL]
+        }.getOrNull()
+        val useSamsung = samsungSteps != null && samsungSteps > 0
+        val stepsToday = if (useSamsung) samsungSteps!! else agg[StepsRecord.COUNT_TOTAL] ?: 0L
+        val stepsUpdatedAt = runCatching {
+            client.readRecords(
+                ReadRecordsRequest(
+                    recordType = StepsRecord::class,
+                    timeRangeFilter = todayRange,
+                    dataOriginFilter = if (useSamsung) samsung else emptySet(),
+                    ascendingOrder = false,
+                    pageSize = 1,
+                ),
+            ).records.firstOrNull()?.endTime
+        }.getOrNull()
+
         val weekStart = today.minusDays(6)
         val weekly = client.aggregateGroupByPeriod(
             AggregateGroupByPeriodRequest(
                 metrics = setOf(StepsRecord.COUNT_TOTAL),
                 timeRangeFilter = TimeRangeFilter.between(weekStart.atStartOfDay(), today.plusDays(1).atStartOfDay()),
                 timeRangeSlicer = Period.ofDays(1),
+                dataOriginFilter = if (useSamsung) samsung else emptySet(),
             ),
         )
         val stepsByDay = weekly.associate { it.startTime.toLocalDate() to (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) }
@@ -117,7 +145,7 @@ class HealthRepository(private val context: Context) {
         }
 
         return WatchSummary(
-            stepsToday = agg[StepsRecord.COUNT_TOTAL] ?: 0L,
+            stepsToday = stepsToday,
             heartAvg = agg[HeartRateRecord.BPM_AVG],
             heartMin = agg[HeartRateRecord.BPM_MIN],
             heartMax = agg[HeartRateRecord.BPM_MAX],
@@ -125,6 +153,8 @@ class HealthRepository(private val context: Context) {
             activeKcal = agg[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0,
             week = week,
             workouts = sessions,
+            stepsUpdatedAt = stepsUpdatedAt,
+            fromSamsungHealth = useSamsung,
         )
     }
 
@@ -158,5 +188,6 @@ class HealthRepository(private val context: Context) {
 
     companion object {
         const val PROVIDER = "com.google.android.apps.healthdata"
+        const val SAMSUNG_HEALTH = "com.sec.android.app.shealth"
     }
 }

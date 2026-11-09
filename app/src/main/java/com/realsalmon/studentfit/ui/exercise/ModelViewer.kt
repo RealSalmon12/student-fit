@@ -10,6 +10,12 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.ConsoleMessage
+import android.webkit.WebResourceError
+import android.util.Log
+import androidx.compose.foundation.layout.padding
+import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
@@ -74,17 +80,20 @@ fun ModelViewer(
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             val main = Handler(Looper.getMainLooper())
-            addJavascriptInterface(object {
-                @JavascriptInterface
-                fun onReady() {
-                    main.post { ready = true }
+            addJavascriptInterface(
+                ViewerBridge(
+                    readyCb = { main.post { ready = true } },
+                    loadedCb = { main.post { loaded = true } },
+                    errorCb = { msg -> main.post { error = msg } },
+                ),
+                "Android",
+            )
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(m: ConsoleMessage): Boolean {
+                    Log.d("StudentFit3D", "${m.messageLevel()} ${m.message()} (${m.sourceId()}:${m.lineNumber()})")
+                    return true
                 }
-
-                @JavascriptInterface
-                fun onError(msg: String) {
-                    main.post { error = msg }
-                }
-            }, "Android")
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                     val url = request.url
@@ -98,10 +107,19 @@ fun ModelViewer(
                         else -> "application/octet-stream"
                     }
                     return try {
-                        WebResourceResponse(mime, "utf-8", view.context.assets.open(path))
+                        WebResourceResponse(
+                            mime, if (mime.startsWith("text/")) "utf-8" else null, 200, "OK",
+                            mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-cache"),
+                            view.context.assets.open(path),
+                        )
                     } catch (e: Exception) {
+                        Log.w("StudentFit3D", "asset $path", e)
                         null
                     }
+                }
+
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, err: WebResourceError) {
+                    if (request.isForMainFrame) main.post { error = "페이지 오류 ${err.errorCode}" }
                 }
             }
             // 가로로 끌면 사람을 돌리고, 세로로 끌면 화면이 스크롤돼요.
@@ -134,14 +152,45 @@ fun ModelViewer(
         value = withContext(Dispatchers.Default) { MotionExport.toJson(motion) }
     }
 
+    // 다리(JS → 앱 알림)가 안 통하는 기기도 있어서, 준비됐는지 직접 물어보기도 해요.
+    LaunchedEffect(webView) {
+        var waited = 0
+        while (!ready && error == null && waited < 20_000) {
+            delay(400)
+            waited += 400
+            webView.evaluateJavascript("(window.SF_READY===true)+'|'+(window.SF_ERROR||'')") { r ->
+                val v = r?.trim('"').orEmpty()
+                if (v.startsWith("true")) ready = true
+                val e = v.substringAfter('|', "")
+                if (e.isNotBlank()) error = e
+            }
+        }
+        if (!ready && error == null) error = "시간 초과"
+    }
+    LaunchedEffect(ready, json) {
+        // 불러오기 요청 뒤에도 그려졌다는 소식이 없으면 확인해요.
+        if (!ready || json == null) return@LaunchedEffect
+        delay(1500)
+        webView.evaluateJavascript("(window.SF_LOADED===true)+''") { r -> if (r?.contains("true") == true) loaded = true }
+        delay(6000)
+        if (!loaded && error == null) {
+            webView.evaluateJavascript("(window.SF_LOADED===true)+''") { r ->
+                if (r?.contains("true") == true) loaded = true else error = "동작을 그리지 못했어요"
+            }
+        }
+    }
+
     fun js(code: String) = webView.evaluateJavascript(code, null)
     fun f(v: Float) = String.format(Locale.US, "%.3f", v)
 
     LaunchedEffect(ready, json, focusUpper) {
         val data = json
         if (ready && data != null) {
-            js("SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,{plumb:$plumbLine,focusUpper:$focusUpper${if (time != null) ",time:${f(time)}" else ""}})")
-            loaded = true
+            val opts = "{plumb:$plumbLine,focusUpper:$focusUpper${if (time != null) ",time:${f(time)}" else ""}}"
+            js(
+                "try{SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,$opts);window.SF_LOADED=true;" +
+                    "window.Android&&Android.onLoaded&&Android.onLoaded()}catch(e){window.SF_ERROR=String(e);window.Android&&Android.onError&&Android.onError(String(e))}",
+            )
         }
     }
     LaunchedEffect(ready, view, viewKey) {
@@ -155,16 +204,45 @@ fun ModelViewer(
     }
 
     Box(modifier) {
-        AndroidView(factory = { webView }, modifier = Modifier.matchParentSize())
-        AnimatedVisibility(!loaded && error == null, Modifier.align(Alignment.Center), exit = fadeOut()) {
+        val failed = error != null
+        if (!failed) {
+            AndroidView(factory = { webView }, modifier = Modifier.matchParentSize())
+        } else {
+            // 3D를 못 띄우는 경우에도 동작은 볼 수 있게 간단한 모형으로 대신 보여줘요.
+            SkeletonViewer(
+                motion, skeletonColors(), Modifier.matchParentSize(),
+                view = view, focusUpper = focusUpper, playing = playing, speed = speed, time = time,
+            )
+        }
+        AnimatedVisibility(!loaded && !failed, Modifier.align(Alignment.Center), exit = fadeOut()) {
             CircularProgressIndicator(Modifier.size(36.dp))
         }
         error?.let {
             Text(
-                "3D 모델을 불러오지 못했어요",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.align(Alignment.Center),
+                "3D 모델을 띄우지 못해 간단한 모형으로 보여줘요 ($it)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
             )
         }
     }
+}
+
+/** JS → 앱 알림. WebView가 접근할 수 있게 공개 클래스로 둬요(익명 객체는 기기에 따라 호출이 막혀요). */
+class ViewerBridge(
+    private val readyCb: () -> Unit,
+    private val loadedCb: () -> Unit,
+    private val errorCb: (String) -> Unit,
+) {
+    @JavascriptInterface
+    fun onReady() { readyCb() }
+
+    @JavascriptInterface
+    fun onLoaded() { loadedCb() }
+
+    @JavascriptInterface
+    fun onError(msg: String) { errorCb(msg) }
+
+    @JavascriptInterface
+    fun onYaw(yaw: Double) { }
 }

@@ -63,6 +63,11 @@ private const val STEP_GOAL = 8000
 fun WatchScreen(vm: WatchViewModel = viewModel()) {
     val context = LocalContext.current
     val permissionLauncher = rememberLauncherForActivityResult(vm.repo.permissionContract()) { vm.refresh() }
+    // 다른 앱(삼성 헬스)에 다녀오거나 탭을 다시 열면 새 기록을 읽어요
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        vm.refresh()
+        onPauseOrDispose { }
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding(),
@@ -119,6 +124,22 @@ fun WatchScreen(vm: WatchViewModel = viewModel()) {
             is WatchUi.Ready -> {
                 val s = ui.summary
                 item { StepsHero(s) }
+                item {
+                    SoftCard {
+                        val at = s.stepsUpdatedAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN))
+                        Text(
+                            buildString {
+                                append(if (s.fromSamsungHealth) "삼성 헬스 기록 기준" else "Health Connect 기록 기준")
+                                if (at != null) append(", ${at}까지 반영")
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Label("워치 화면보다 적게 나오면 삼성 헬스가 아직 동기화하지 않은 거예요. 삼성 헬스를 한 번 열었다 돌아오면 맞춰져요.")
+                        vm.repo.samsungHealthIntent()?.let { i ->
+                            androidx.compose.material3.OutlinedButton(onClick = { context.startActivity(i) }) { Text("삼성 헬스 열어서 동기화") }
+                        }
+                    }
+                }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Stat(Icons.Filled.Favorite, (s.latestHeart ?: s.heartAvg)?.toString() ?: "-", "현재 bpm", Coral, Modifier.weight(1f))
