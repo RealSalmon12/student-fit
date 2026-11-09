@@ -1,7 +1,6 @@
 package com.realsalmon.studentfit.ui.exercise
 
 import android.annotation.SuppressLint
-import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
@@ -34,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.realsalmon.studentfit.domain.motion.Motion
@@ -67,13 +67,16 @@ fun ModelViewer(
     viewKey: Int = 0,
 ) {
     val context = LocalContext.current
+    // 투명 WebView 위의 3D가 안 보이는 기기가 있어서, 배경을 불투명한 색으로 칠해요.
+    val bg = MaterialTheme.colorScheme.surfaceContainerLow
+    val bgHex = String.format(Locale.US, "#%06X", bg.toArgb() and 0xFFFFFF)
     var ready by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val webView = remember {
         WebView(context).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(bg.toArgb())
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
@@ -179,6 +182,26 @@ fun ModelViewer(
             }
         }
     }
+    // 실제로 사람이 그려졌는지 화면 픽셀을 확인해요. 계속 비어 있으면 간단한 모형으로 바꿔요.
+    LaunchedEffect(loaded) {
+        if (!loaded) return@LaunchedEffect
+        var empty = 0
+        repeat(6) {
+            delay(1200)
+            if (error != null) return@LaunchedEffect
+            webView.evaluateJavascript("(function(){try{return SF.probe()}catch(e){return 'ERR '+e}})()") { r ->
+                val v = (r ?: "").trim('"').replace("\\\"", "\"")
+                Log.d("StudentFit3D", "probe $v")
+                val drawn = Regex("\"drawn\":([0-9.eE-]+)").find(v)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+                if (drawn < 0.005) {
+                    empty++
+                    if (empty >= 3 && error == null) error = "빈 화면 " + v.take(80)
+                } else {
+                    empty = 0
+                }
+            }
+        }
+    }
 
     fun js(code: String) = webView.evaluateJavascript(code, null)
     fun f(v: Float) = String.format(Locale.US, "%.3f", v)
@@ -188,7 +211,7 @@ fun ModelViewer(
         if (ready && data != null) {
             val opts = "{plumb:$plumbLine,focusUpper:$focusUpper${if (time != null) ",time:${f(time)}" else ""}}"
             js(
-                "try{SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,$opts);window.SF_LOADED=true;" +
+                "try{SF.setBg('$bgHex');SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,$opts);window.SF_LOADED=true;" +
                     "window.Android&&Android.onLoaded&&Android.onLoaded()}catch(e){window.SF_ERROR=String(e);window.Android&&Android.onError&&Android.onError(String(e))}",
             )
         }

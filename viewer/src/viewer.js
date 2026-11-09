@@ -358,6 +358,7 @@ function poseAtTime(t) {
   return {P, dy: data.ground[i] * (1 - f) + data.ground[k] * f};
 }
 function render() {
+  if (!resize()) return;
   if (!model || !data) { renderer.render(scene, camera); return; }
   const {P, dy} = poseAtTime(time);
   applyPose(P);
@@ -366,13 +367,20 @@ function render() {
   renderer.render(scene, camera);
 }
 
+// 화면 크기: WebView가 처음엔 크기 0으로 열릴 수 있어서, 크기가 생기거나 바뀔 때마다 다시 맞춰요.
+let sizeW = 0, sizeH = 0;
 function resize() {
   const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+  if (w < 2 || h < 2) return false;
+  if (w === sizeW && h === sizeH) return true;
+  sizeW = w; sizeH = h;
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
   fit();
+  return true;
 }
-window.addEventListener('resize', () => { resize(); render(); });
+window.addEventListener('resize', () => { if (resize()) render(); });
+if (window.ResizeObserver) new ResizeObserver(() => { if (resize()) render(); }).observe(canvas);
 
 let last = performance.now();
 function loop(now) {
@@ -412,9 +420,32 @@ function contacts(t) {
 window.SF = {contacts,dbg: () => ({box: data && data.box, center, dist, cw: canvas.clientWidth, ch: canvas.clientHeight, f0: data && data.frames[0][3]}),
   load,
   setView(y, e, instant) { yawTarget = y; elevTarget = e; if (instant) { yaw = y; elev = e; } fit(); },
+  /** 배경을 불투명한 색으로 칠해요(투명 WebView에서 3D가 안 보이는 기기가 있어요). */
+  setBg(hex) {
+    renderer.setClearColor(new THREE.Color(hex), 1);
+    document.documentElement.style.background = document.body.style.background = hex;
+    render();
+  },
   setTime(t) { time = t; },
   setPlaying(p) { playing = !!p; },
   setSpeed(s) { speed = s; },
+  /** 진단: 지금 크기와 실제로 그려진 픽셀 비율을 돌려줘요. */
+  probe() {
+    const ok = resize();
+    const gl = renderer.getContext();
+    if (!ok || !gl) return JSON.stringify({w: canvas.clientWidth, h: canvas.clientHeight, gl: !!gl, drawn: 0});
+    render();
+    const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, px = new Uint8Array(W * H * 4);
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const c = new THREE.Color(); renderer.getClearColor(c); const a0 = renderer.getClearAlpha();
+    const hx = c.getHex(), cr = hx >> 16 & 255, cg = hx >> 8 & 255, cb = hx & 255, ca = a0 * 255;
+    let n = 0, hit = 0;
+    for (let i = 0; i < px.length; i += 4 * 97) {
+      n++;
+      if (Math.abs(px[i + 3] - ca) > 6 || (a0 > 0 && (Math.abs(px[i] - cr) + Math.abs(px[i + 1] - cg) + Math.abs(px[i + 2] - cb) > 18))) hit++;
+    }
+    return JSON.stringify({w: canvas.clientWidth, h: canvas.clientHeight, bw: W, bh: H, gl: true, lost: gl.isContextLost(), drawn: n ? hit / n : 0, cam: [camera.aspect, dist]});
+  },
   renderAt(t) { time = t; yaw = yawTarget; elev = elevTarget; render(); },
 };
 
