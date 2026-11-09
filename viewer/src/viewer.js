@@ -370,11 +370,12 @@ function render() {
 // 화면 크기: WebView가 처음엔 크기 0으로 열릴 수 있어서, 크기가 생기거나 바뀔 때마다 다시 맞춰요.
 let sizeW = 0, sizeH = 0;
 function resize() {
-  const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+  // 화면(창) 크기를 기준으로 해요. 캔버스 높이가 0으로 잡히는 WebView가 있어서 크기를 직접 정해 줘요.
+  const w = window.innerWidth || canvas.clientWidth, h = window.innerHeight || canvas.clientHeight;
   if (w < 2 || h < 2) return false;
-  if (w === sizeW && h === sizeH) return true;
+  if (w === sizeW && h === sizeH && canvas.clientHeight > 1) return true;
   sizeW = w; sizeH = h;
-  renderer.setSize(w, h, false);
+  renderer.setSize(w, h, true);
   camera.aspect = w / h; camera.updateProjectionMatrix();
   fit();
   return true;
