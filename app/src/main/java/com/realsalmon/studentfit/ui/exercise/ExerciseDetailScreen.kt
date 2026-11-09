@@ -76,6 +76,7 @@ fun ExerciseViewerCard(
     var playing by remember { mutableStateOf(true) }
     var slow by remember { mutableStateOf(false) }
     var viewIndex by remember(ex.id) { mutableStateOf(0) }
+    var viewKey by remember(ex.id) { mutableStateOf(0) }
     var mirrored by remember(ex.id) { mutableStateOf(false) }
     val choices = remember(ex.id) { viewChoices(ex) }
 
@@ -98,6 +99,7 @@ fun ExerciseViewerCard(
                 focusUpper = ex.focusUpper,
                 playing = playing,
                 speed = if (slow) 0.5f else 1f,
+                viewKey = viewKey,
             )
             Pill(
                 "끌어서 돌려보기",
@@ -129,7 +131,7 @@ fun ExerciseViewerCard(
             choices.forEachIndexed { i, (label, _) ->
                 FilterChip(
                     selected = viewIndex == i,
-                    onClick = { viewIndex = i },
+                    onClick = { viewIndex = i; viewKey++ },
                     label = { Text(label) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,

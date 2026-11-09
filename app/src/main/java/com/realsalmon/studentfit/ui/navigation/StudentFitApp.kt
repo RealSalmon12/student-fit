@@ -39,6 +39,7 @@ import com.realsalmon.studentfit.ui.exercise.ExerciseDetailScreen
 import com.realsalmon.studentfit.ui.exercise.ExercisesScreen
 import com.realsalmon.studentfit.ui.exercise.GuideScreen
 import com.realsalmon.studentfit.ui.home.HomeScreen
+import com.realsalmon.studentfit.ui.history.HistoryScreen
 import com.realsalmon.studentfit.ui.watch.WatchScreen
 
 object Routes {
@@ -50,6 +51,7 @@ object Routes {
     const val CAMERA_SCAN = "camera_scan"
     const val EXERCISE_DETAIL = "exercise/{id}"
     const val GUIDE = "guide/{id}"
+    const val HISTORY = "history"
     fun exercise(id: String) = "exercise/$id"
     fun guide(id: String) = "guide/$id"
 }
@@ -74,6 +76,7 @@ class AppNavigator(private val nav: NavHostController) {
     fun camera() = nav.navigate(Routes.CAMERA_SCAN)
     fun exercise(id: String) = nav.navigate(Routes.exercise(id))
     fun guide(id: String) = nav.navigate(Routes.guide(id))
+    fun history() = nav.navigate(Routes.HISTORY)
     fun back() { nav.popBackStack() }
 }
 
@@ -119,6 +122,7 @@ fun StudentFitApp() {
             composable(Routes.BODY) { BodyScreen(go) }
             composable(Routes.EXERCISES) { ExercisesScreen(go) }
             composable(Routes.WATCH) { WatchScreen() }
+            composable(Routes.HISTORY) { HistoryScreen(onBack = go::back, onExercise = go::exercise) }
             composable(Routes.BODY_INPUT) { BodyTypeInputScreen(onBack = go::back) }
             composable(Routes.CAMERA_SCAN) { CameraScanScreen(onBack = go::back, onSaved = { needsInput -> go.back(); if (needsInput) go.bodyInput() else go.tab(Routes.EXERCISES) }) }
             composable(

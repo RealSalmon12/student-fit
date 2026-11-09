@@ -44,6 +44,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import com.realsalmon.studentfit.data.AppSettings
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +72,17 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
     val log = rememberRoutineLog()
     var time by remember { mutableFloatStateOf(0f) }
     var paused by remember { mutableStateOf(false) }
+    // 다시 시작할 때마다 바뀌어서 시계가 다시 돌아가요("한 번 더"가 멈춰 있던 문제)
+    var runId by remember { mutableStateOf(0) }
+    val context = LocalContext.current
+    val settings = remember { AppSettings(context) }
+    var voiceOn by remember { mutableStateOf(settings.voiceGuide) }
+    val coach = rememberVoiceCoach()
+    LaunchedEffect(voiceOn) {
+        coach.enabled = voiceOn
+        settings.voiceGuide = voiceOn
+        if (!voiceOn) coach.stop()
+    }
 
     // 따라하는 동안 화면이 꺼지지 않게
     val view = LocalView.current
@@ -76,8 +91,8 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
         onDispose { view.keepScreenOn = false }
     }
 
-    LaunchedEffect(paused) {
-        if (paused) return@LaunchedEffect
+    LaunchedEffect(paused, runId) {
+        if (paused) { coach.stop(); return@LaunchedEffect }
         var last = withFrameNanos { it }
         while (time < plan.totalSec) {
             val now = withFrameNanos { it }
@@ -90,6 +105,30 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
     LaunchedEffect(state.finished) { if (state.finished) log.setDone(ex.id, true) }
 
     val seg = state.segment
+
+    // 음성 안내 + 진동
+    LaunchedEffect(state.index, state.finished, runId) {
+        coach.buzz()
+        when {
+            state.finished -> coach.say("끝! 수고했어요")
+            seg is Segment.Prepare -> coach.say("${ex.name}. 준비 자세를 잡으세요")
+            seg is Segment.Work -> {
+                val sideText = if (seg.side != Side.BOTH) " ${seg.side.label}" else ""
+                coach.say(if (ex.rx.isHold) "${seg.set}세트$sideText. 버티세요" else "${seg.set}세트$sideText 시작")
+            }
+            seg is Segment.Switch -> coach.say("반대쪽으로 바꾸세요")
+            seg is Segment.Rest -> coach.say("쉬는 시간 ${seg.durationSec.toInt()}초")
+        }
+    }
+    LaunchedEffect(state.rep, state.index) {
+        val rep = state.rep
+        if (seg is Segment.Work && rep != null) coach.say(VoiceCoach.count(rep), flush = rep > 1)
+    }
+    val secLeft = plan.secondsLeft(state)
+    LaunchedEffect(secLeft, state.index) {
+        val countsDown = seg != null && !(seg is Segment.Work && state.rep != null)
+        if (!paused && countsDown && secLeft in 1..3 && (seg?.durationSec ?: 0f) > 4f) coach.say(VoiceCoach.count(secLeft))
+    }
     val side = (seg as? Segment.Work)?.side
         ?: (plan.segments.getOrNull(state.index + 1) as? Segment.Work)?.side
     val motion = if (side == Side.RIGHT) ex.mirroredMotion else ex.motion
@@ -111,7 +150,12 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
             IconButton(onClick = onClose) { Icon(Icons.Filled.Close, "닫기") }
             Text(ex.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Text(ex.dose, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.width(12.dp))
+            IconButton(onClick = { voiceOn = !voiceOn }) {
+                Icon(
+                    if (voiceOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                    if (voiceOn) "음성 안내 끄기" else "음성 안내 켜기",
+                )
+            }
         }
         LinearProgressIndicator(
             progress = { state.totalProgress },
@@ -179,7 +223,7 @@ fun GuideScreen(id: String, onClose: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (state.finished) {
-                OutlinedButton(onClick = { time = 0f; paused = false }, modifier = Modifier.height(56.dp)) { Text("한 번 더") }
+                OutlinedButton(onClick = { time = 0f; paused = false; runId++ }, modifier = Modifier.height(56.dp)) { Text("한 번 더") }
                 Button(onClick = onClose, modifier = Modifier.height(56.dp).weight(1f)) { Text("완료하고 돌아가기") }
             } else {
                 Spacer(Modifier.size(56.dp))

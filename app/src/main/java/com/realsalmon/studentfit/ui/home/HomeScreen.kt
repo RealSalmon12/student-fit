@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.outlined.Circle
@@ -113,7 +114,7 @@ fun HomeScreen(go: AppNavigator) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(today, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                     if (streak > 0) {
-                        Pill("${streak}일 연속", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                        Pill("${streak}일 연속", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Modifier.clickable { go.history() })
                     }
                 }
                 Text(
@@ -124,6 +125,33 @@ fun HomeScreen(go: AppNavigator) {
                     },
                     style = MaterialTheme.typography.headlineMedium,
                 )
+            }
+        }
+
+        // 이번 주: 운동한 날 표시(누르면 기록 화면)
+        item {
+            val monday = remember { LocalDate.now().with(java.time.DayOfWeek.MONDAY) }
+            val week = remember(done) { log.counts(monday, monday.plusDays(6)) }
+            val todayDate = LocalDate.now()
+            Row(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).clickable { go.history() }.padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                listOf("월", "화", "수", "목", "금", "토", "일").forEachIndexed { i, label ->
+                    val d = monday.plusDays(i.toLong())
+                    val n = week[d] ?: 0
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(label, style = MaterialTheme.typography.labelMedium, color = if (d == todayDate) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Box(
+                            Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(if (n > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (n > 0) Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
+                            else Text("${d.dayOfMonth}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
         }
 

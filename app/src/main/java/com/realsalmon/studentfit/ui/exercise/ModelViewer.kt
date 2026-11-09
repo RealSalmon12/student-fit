@@ -57,6 +57,8 @@ fun ModelViewer(
     speed: Float = 1f,
     time: Float? = null,
     plumbLine: Boolean = true,
+    /** 값이 바뀌면 같은 시점 버튼을 다시 눌러도 그 방향으로 돌아가요. */
+    viewKey: Int = 0,
 ) {
     val context = LocalContext.current
     var ready by remember { mutableStateOf(false) }
@@ -122,6 +124,7 @@ fun ModelViewer(
     DisposableEffect(webView) {
         onDispose {
             webView.stopLoading()
+            (webView.parent as? android.view.ViewGroup)?.removeView(webView)
             webView.destroy()
         }
     }
@@ -141,7 +144,7 @@ fun ModelViewer(
             loaded = true
         }
     }
-    LaunchedEffect(ready, view) {
+    LaunchedEffect(ready, view, viewKey) {
         if (ready) js("SF.setView(${f(view.yaw)},${f(view.elevation)},false)")
     }
     LaunchedEffect(ready, playing, speed, time == null) {
