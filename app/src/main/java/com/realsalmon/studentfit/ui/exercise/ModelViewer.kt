@@ -1,6 +1,15 @@
 package com.realsalmon.studentfit.ui.exercise
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.graphics.Rect
+import android.view.PixelCopy
+import android.view.View
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
@@ -69,14 +78,17 @@ fun ModelViewer(
     val context = LocalContext.current
     // 투명 WebView 위의 3D가 안 보이는 기기가 있어서, 배경을 불투명한 색으로 칠해요.
     val bg = MaterialTheme.colorScheme.surfaceContainerLow
+    val viewBg = MaterialTheme.colorScheme.surfaceContainer
     val bgHex = String.format(Locale.US, "#%06X", bg.toArgb() and 0xFFFFFF)
     var ready by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var lastProbe by remember { mutableStateOf("") }
 
     val webView = remember {
         WebView(context).apply {
-            setBackgroundColor(bg.toArgb())
+            // 페이지(흰색)와 살짝 다른 색: 화면 캡처로 페이지가 붙었는지 구분할 수 있어요.
+            setBackgroundColor(viewBg.toArgb())
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
@@ -139,7 +151,8 @@ fun ModelViewer(
                 }
                 false
             }
-            loadUrl(VIEWER_URL)
+            // 화면에 붙은 뒤에 불러와요(안 붙은 상태로 열면 그림이 안 나오는 기기가 있어요).
+            post { loadUrl(VIEWER_URL) }
         }
     }
     DisposableEffect(webView) {
@@ -192,6 +205,7 @@ fun ModelViewer(
             webView.evaluateJavascript("(function(){try{return SF.probe()}catch(e){return 'ERR '+e}})()") { r ->
                 val v = (r ?: "").trim('"').replace("\\\"", "\"")
                 Log.d("StudentFit3D", "probe $v")
+                lastProbe = v.take(70)
                 val drawn = Regex("\"drawn\":([0-9.eE-]+)").find(v)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
                 if (drawn < 0.005) {
                     empty++
@@ -200,6 +214,26 @@ fun ModelViewer(
                     empty = 0
                 }
             }
+        }
+    }
+
+    // 실제 화면에 사람이 보이는지(가운데 부분 픽셀)도 확인해요. 계속 비어 있으면 간단한 모형으로 바꿔요.
+    LaunchedEffect(loaded) {
+        if (!loaded) return@LaunchedEffect
+        delay(2500)
+        var blank = 0
+        repeat(4) {
+            if (error != null) return@LaunchedEffect
+            when (screenBlank(webView)) {
+                true -> blank++
+                false -> return@LaunchedEffect
+                null -> {}
+            }
+            if (blank >= 2) {
+                error = "화면에 안 그려짐 · $lastProbe"
+                return@LaunchedEffect
+            }
+            delay(1500)
         }
     }
 
@@ -268,4 +302,46 @@ class ViewerBridge(
 
     @JavascriptInterface
     fun onYaw(yaw: Double) { }
+}
+
+private fun Context.findActivity(): Activity? {
+    var c: Context = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+/** 화면에 실제로 그려진 3D 영역 가운데를 찍어 보고, 한 가지 색뿐이면 true(비어 있음). 확인 못 하면 null. */
+private suspend fun screenBlank(view: View): Boolean? = suspendCancellableCoroutine { cont ->
+    fun done(v: Boolean?) { if (cont.isActive) cont.resume(v) }
+    val act = view.context.findActivity()
+    if (act == null || !view.isAttachedToWindow || view.width < 8 || view.height < 8) { done(null); return@suspendCancellableCoroutine }
+    val loc = IntArray(2)
+    view.getLocationInWindow(loc)
+    val r = Rect(
+        loc[0] + view.width / 4, loc[1] + view.height * 15 / 100,
+        loc[0] + view.width * 3 / 4, loc[1] + view.height * 80 / 100,
+    )
+    val bmp = Bitmap.createBitmap(48, 64, Bitmap.Config.ARGB_8888)
+    try {
+        PixelCopy.request(act.window, r, bmp, { res ->
+            if (res != PixelCopy.SUCCESS) { done(null); return@request }
+            val px = IntArray(bmp.width * bmp.height)
+            bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+            val ref = px[0]
+            var diff = 0
+            for (p in px) {
+                val d = abs(((p shr 16) and 255) - ((ref shr 16) and 255)) +
+                    abs(((p shr 8) and 255) - ((ref shr 8) and 255)) + abs((p and 255) - (ref and 255))
+                if (d > 40) diff++
+            }
+            Log.d("StudentFit3D", "screen diff $diff/${px.size}")
+            done(diff < px.size / 100)
+        }, Handler(Looper.getMainLooper()))
+    } catch (e: Exception) {
+        Log.w("StudentFit3D", "pixelcopy", e)
+        done(null)
+    }
 }
