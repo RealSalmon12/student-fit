@@ -87,7 +87,7 @@ fun ExerciseViewerCard(
                 .clip(MaterialTheme.shapes.large)
                 .background(
                     Brush.verticalGradient(
-                        listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f), MaterialTheme.colorScheme.surfaceContainerLow),
+                        listOf(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.colorScheme.surfaceContainer),
                     ),
                 ),
         ) {

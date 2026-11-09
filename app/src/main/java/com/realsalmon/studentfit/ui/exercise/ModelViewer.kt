@@ -56,6 +56,7 @@ fun ModelViewer(
     playing: Boolean = true,
     speed: Float = 1f,
     time: Float? = null,
+    plumbLine: Boolean = true,
 ) {
     val context = LocalContext.current
     var ready by remember { mutableStateOf(false) }
@@ -136,7 +137,7 @@ fun ModelViewer(
     LaunchedEffect(ready, json, focusUpper) {
         val data = json
         if (ready && data != null) {
-            js("SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,{focusUpper:$focusUpper${if (time != null) ",time:${f(time)}" else ""}})")
+            js("SF.setView(${f(view.yaw)},${f(view.elevation)},true);SF.load($data,{plumb:$plumbLine,focusUpper:$focusUpper${if (time != null) ",time:${f(time)}" else ""}})")
             loaded = true
         }
     }

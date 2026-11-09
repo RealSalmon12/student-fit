@@ -35,32 +35,35 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.realsalmon.studentfit.ui.theme.Violet
-import com.realsalmon.studentfit.ui.theme.VioletDeep
+import com.realsalmon.studentfit.ui.theme.Ink
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 
-val HeroBrush = Brush.linearGradient(listOf(Color(0xFF7B5CFF), Violet, VioletDeep))
+/** 예전 그라데이션 대신 남색 한 색으로 채워요. */
+val HeroBrush = Brush.linearGradient(listOf(Ink, Ink))
 
-/** 그라데이션 배경의 큰 카드 */
+/** 남색 바탕의 큰 패널(체육관 점수판 느낌) */
 @Composable
 fun HeroCard(
     modifier: Modifier = Modifier,
-    brush: Brush = HeroBrush,
+    brush: Brush? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val bg = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else Ink
     Box(
         modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .background(brush)
+            .then(if (brush != null) Modifier.background(brush) else Modifier.background(bg))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(22.dp),
+            .padding(20.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
     }
 }
 
-/** 흰 배경의 둥근 카드 */
+/** 흰 바탕 + 얇은 테두리 카드 */
 @Composable
 fun SoftCard(
     modifier: Modifier = Modifier,
@@ -72,21 +75,25 @@ fun SoftCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = color,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         onClick = onClick ?: {},
         enabled = onClick != null,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
+/** 구역 제목: 왼쪽에 코트 라인 같은 짧은 파란 막대 */
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier, action: (@Composable RowScope.() -> Unit)? = null) {
     Row(
-        modifier.fillMaxWidth().padding(top = 8.dp),
+        modifier.fillMaxWidth().padding(top = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.size(width = 4.dp, height = 18.dp).background(MaterialTheme.colorScheme.primary))
+        Spacer(Modifier.width(10.dp))
         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         action?.invoke(this)
     }
@@ -95,7 +102,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, action: (@Compos
 @Composable
 fun IconBadge(icon: ImageVector, container: Color, content: Color, size: Int = 44) {
     Box(
-        Modifier.size(size.dp).clip(RoundedCornerShape((size * 0.32f).dp)).background(container),
+        Modifier.size(size.dp).clip(RoundedCornerShape((size * 0.22f).dp)).background(container),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size((size * 0.5f).dp))
@@ -140,7 +147,7 @@ fun Pill(text: String, container: Color, content: Color, modifier: Modifier = Mo
         text,
         style = MaterialTheme.typography.labelMedium,
         color = content,
-        modifier = modifier.clip(CircleShape).background(container).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier = modifier.clip(MaterialTheme.shapes.small).background(container).padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 

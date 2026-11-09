@@ -269,6 +269,19 @@ function meshBox(box) {
 }
 
 let focusUpper = false;
+// 노란 정렬선(다림줄): 서서 하는 운동에서 발목 사이를 지나는 세로선
+const plumb = new THREE.Group();
+{
+  const mat = new THREE.MeshBasicMaterial({color: 0xffc93c, transparent: true, opacity: 0.9, depthTest: false});
+  const line = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 1.9, 8), mat);
+  line.position.y = 0.95;
+  const bob = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.045, 16), mat);
+  bob.rotation.x = Math.PI; bob.position.y = 0.03;
+  plumb.add(line, bob);
+  plumb.renderOrder = 10; line.renderOrder = 10; bob.renderOrder = 10;
+  plumb.visible = false;
+  scene.add(plumb);
+}
 function load(json, opts) {
   const d = typeof json === 'string' ? JSON.parse(json) : json;
   opts = opts || {};
@@ -294,6 +307,10 @@ function load(json, opts) {
     }
   }
   data = {period: d.period, frames, ground, box: focusUpper ? focusBox : box};
+  const f0 = frames[0];
+  const standing = f0[J.HEAD].y - f0[J.L_ANKLE].y > 1.1;
+  plumb.visible = !!opts.plumb && standing && !focusUpper;
+  plumb.position.set((f0[J.L_ANKLE].x + f0[J.R_ANKLE].x) / 2, 0, (f0[J.L_ANKLE].z + f0[J.R_ANKLE].z) / 2);
   if (opts.time != null) time = opts.time;
   fit();
   render();

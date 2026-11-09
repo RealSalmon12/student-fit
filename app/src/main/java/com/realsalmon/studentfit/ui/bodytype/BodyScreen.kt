@@ -39,6 +39,12 @@ import com.realsalmon.studentfit.ui.rememberProfile
 import com.realsalmon.studentfit.ui.theme.Coral
 import com.realsalmon.studentfit.ui.theme.Mint
 import com.realsalmon.studentfit.ui.theme.Sky
+import com.realsalmon.studentfit.ui.theme.Court
+import com.realsalmon.studentfit.ui.theme.Plumb
+import com.realsalmon.studentfit.domain.AlignmentDiagram
+import com.realsalmon.studentfit.ui.components.AlignmentFigure
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 
 @Composable
 fun BodyScreen(go: AppNavigator) {
@@ -49,18 +55,48 @@ fun BodyScreen(go: AppNavigator) {
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item { Text("체형 분석", style = MaterialTheme.typography.headlineMedium) }
+        item { Text("체형 분석", style = MaterialTheme.typography.headlineLarge) }
 
         if (result != null && profile != null) {
             item {
                 HeroCard {
-                    Text("${profile.heightCm.toInt()}cm · ${profile.weightKg}kg · ${profile.age}세", color = Color.White.copy(alpha = 0.8f))
+                    Text("${profile.heightCm.toInt()}cm, ${profile.weightKg}kg, ${profile.age}세", color = Color.White.copy(alpha = 0.7f))
                     Text(result.typeTitle, color = Color.White, style = MaterialTheme.typography.displaySmall)
-                    Text("BMI ${result.bmiText} · ${result.bmiCategory.label}", color = Color.White)
+                    Text("BMI ${result.bmiText} (${result.bmiCategory.label})", color = Color.White)
                     BmiGauge(result, Modifier.fillMaxWidth().height(28.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         listOf("저체중", "정상", "과체중", "비만").forEach {
-                            Text(it, color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
+                            Text(it, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            val issues = result?.postureIssues ?: emptySet()
+            val side = remember(issues) { AlignmentDiagram.side(issues) }
+            val front = remember(issues) { AlignmentDiagram.front(issues) }
+            SoftCard {
+                Text("정렬선 진단", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (issues.isEmpty()) "귀·어깨·골반·무릎·발목이 노란 선 위에 있으면 바른 자세예요."
+                    else "빨간 점이 노란 정렬선에서 벗어난 곳이에요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("옆에서" to side, "앞에서" to front).forEach { (label, fig) ->
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            AlignmentFigure(
+                                fig,
+                                Modifier.fillMaxWidth().height(260.dp),
+                                bodyColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                dotColor = MaterialTheme.colorScheme.onSurface,
+                                alertColor = Coral,
+                                showLabels = false,
+                            )
+                            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -90,7 +126,7 @@ fun BodyScreen(go: AppNavigator) {
             }
             if (concerns.isNotEmpty()) {
                 item { SectionHeader("몸매·체력 고민") }
-                items(concerns) { InfoRow(it.label, it.description, Mint) }
+                items(concerns) { InfoRow(it.label, it.description, Court) }
             }
             if (posture.isEmpty() && concerns.isEmpty()) {
                 item {
@@ -115,8 +151,8 @@ fun BodyScreen(go: AppNavigator) {
 @Composable
 private fun InfoRow(title: String, description: String, accent: Color) {
     SoftCard {
-        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Box(Modifier.width(5.dp).height(40.dp).clip(CircleShape).background(accent))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(40.dp).background(accent))
             Column(Modifier.padding(start = 12.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -141,6 +177,6 @@ private fun BmiGauge(result: BodyTypeResult, modifier: Modifier) {
         }
         val x = ((result.bmi.coerceIn(min, max) - min) / (max - min)) * size.width
         drawCircle(Color.White, radius = 11.dp.toPx(), center = Offset(x, size.height / 2f))
-        drawCircle(Color(0xFF3A1FD1), radius = 6.dp.toPx(), center = Offset(x, size.height / 2f))
+        drawCircle(Plumb, radius = 6.dp.toPx(), center = Offset(x, size.height / 2f))
     }
 }
